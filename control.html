@@ -192,6 +192,11 @@
       btn.className = "class-btn";
       btn.textContent = name;
 
+      // 防止 Safari / Chrome 手機版長按時出現「複製／查詢／文字選取」
+      btn.addEventListener("contextmenu", e => e.preventDefault());
+      btn.addEventListener("selectstart", e => e.preventDefault());
+      btn.addEventListener("dragstart", e => e.preventDefault());
+
       let timer = null;
       let longPressed = false;
 
