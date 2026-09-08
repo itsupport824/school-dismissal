@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>放學情況</title>
+  <style>
+    :root {
+      --bg: #08111f;
+      --panel-border: #2b3d59;
+      --text: #f7fbff;
+      --active-bg: #ffd84d;
+      --active-text: #111;
+      --done-bg: #c8f7d3;
+      --done-border: #6fd18b;
+      --done-text: #174d2d;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; width: 100%; height: 100%; overflow: hidden;
+      background: radial-gradient(circle at top, #12243f 0%, var(--bg) 55%, #050a12 100%);
+      font-family: Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      color: var(--text);
+    }
+    .screen {
+      width: 100vw; height: 100vh; padding: 3.2vh 3vw 2.4vh;
+      display: flex; flex-direction: column; gap: 2.2vh;
+    }
+    .header {
+      display: flex; justify-content: space-between; align-items: center; min-height: 8vh;
+    }
+    .title {
+      font-size: clamp(34px, 4.1vw, 86px);
+      font-weight: 900; letter-spacing: .18em; line-height: 1; white-space: nowrap;
+    }
+    .now {
+      min-width: 42vw; display: flex; justify-content: flex-end; align-items: center;
+      gap: 1vw; font-size: clamp(22px, 2.1vw, 44px); font-weight: 800;
+    }
+    .now-label { color: #b9c6d8; font-size: .58em; letter-spacing: .12em; }
+    .now-class {
+      color: #ffe176; font-size: 1.05em; text-align: right;
+      max-width: 31vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .grid {
+      flex: 1; display: grid; grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: repeat(6, 1fr); gap: 1.5vh 1.25vw; min-height: 0; position: relative;
+    }
+    .grid::after {
+      content: ""; position: absolute; left: 0; right: 0; top: 50%;
+      transform: translateY(-50%); height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.24), transparent);
+      pointer-events: none;
+    }
+    .class-card {
+      position: relative; border-radius: 1.25vw; border: 2px solid var(--panel-border);
+      background: linear-gradient(145deg, rgba(28,45,71,.96), rgba(14,28,47,.96));
+      display: flex; align-items: center; justify-content: center;
+      font-size: clamp(40px, 4vw, 86px); font-weight: 900;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 8px 28px rgba(0,0,0,.18);
+      transition: .25s; min-height: 0;
+    }
+    .class-card.done {
+      background: linear-gradient(145deg, #d9fbe1, var(--done-bg));
+      color: var(--done-text); border-color: var(--done-border);
+      box-shadow: 0 0 0 3px rgba(111,209,139,.12), 0 0 24px rgba(111,209,139,.22);
+    }
+    .class-card.done::after {
+      content: "✓"; position: absolute; right: 9%; top: 8%;
+      font-size: .42em; color: #26703e; font-weight: 900;
+    }
+    .class-card.active {
+      z-index: 2; color: var(--active-text); border-color: #e6ba00;
+      background: linear-gradient(145deg, #ffe679, var(--active-bg));
+      box-shadow: 0 0 0 5px rgba(255,216,77,.18), 0 0 36px rgba(255,216,77,.5);
+      animation: pulse 1.35s infinite;
+    }
+    .class-card.active::before {
+      content: "放學中"; position: absolute; left: 8%; top: 8%;
+      padding: .25em .55em; border-radius: 999px;
+      background: rgba(0,0,0,.12); color: #111;
+      font-size: .25em; letter-spacing: .08em; font-weight: 900;
+    }
+    @keyframes pulse {
+      0%,100% { transform: scale(1); }
+      50% { transform: scale(1.045); }
+    }
+    .footer {
+      height: 4.2vh; min-height: 28px; display: flex; justify-content: space-between;
+      align-items: center; color: #8292a6; font-size: clamp(14px, 1.15vw, 24px);
+    }
+    .connection.ok { color: #77dca3; }
+    .connection.bad { color: #ff8d8d; }
+    .setup-error {
+      position: fixed; inset: 0; display: none; place-items: center;
+      background: #08111f; padding: 30px; z-index: 100;
+    }
+    .setup-error.show { display: grid; }
+    .setup-box {
+      max-width: 800px; border: 2px solid #ffbf47; border-radius: 18px;
+      padding: 24px; background: #111d2e; line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <main class="screen">
+    <header class="header">
+      <div class="title">放學情況</div>
+      <div class="now">
+        <span class="now-label">正在放學</span>
+        <span class="now-class" id="nowClass">—</span>
+      </div>
+    </header>
+
+    <section class="grid" id="grid"></section>
+
+    <footer class="footer">
+      <div>請家長留意班別顯示</div>
+      <div class="connection" id="connection">連線中…</div>
+    </footer>
+  </main>
+
+  <div class="setup-error" id="setupError">
+    <div class="setup-box">
+      <strong>Firebase 尚未完成設定</strong><br>
+      請先修改 <code>firebase-config.js</code>，再重新整理此頁。
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+  <script>
+    const grid = document.getElementById("grid");
+    const nowClass = document.getElementById("nowClass");
+    const connection = document.getElementById("connection");
+    const setupError = document.getElementById("setupError");
+    const cards = new Map();
+
+    DISMISSAL_CLASSES.forEach(name => {
+      const el = document.createElement("div");
+      el.className = "class-card";
+      el.textContent = name;
+      grid.appendChild(el);
+      cards.set(name, el);
+    });
+
+    function render(data) {
+      data = data || {};
+      const active = new Set(objectKeysTrue(data.active));
+      const done = new Set(objectKeysTrue(data.done));
+
+      cards.forEach((el, name) => {
+        el.classList.toggle("active", active.has(name));
+        el.classList.toggle("done", done.has(name));
+      });
+
+      nowClass.textContent = active.size ? [...active].join("、") : "—";
+    }
+
+    try {
+      const { db } = initFirebaseServices();
+
+      db.ref("dismissal").on("value", snap => {
+        render(snap.val());
+        connection.textContent = "● 即時連線";
+        connection.className = "connection ok";
+      }, () => {
+        connection.textContent = "● 連線失敗";
+        connection.className = "connection bad";
+      });
+
+      window.addEventListener("offline", () => {
+        connection.textContent = "● 網絡中斷";
+        connection.className = "connection bad";
+      });
+    } catch (err) {
+      setupError.classList.add("show");
+      connection.textContent = "設定未完成";
+      connection.className = "connection bad";
+    }
+  </script>
+</body>
+</html>

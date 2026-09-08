@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>放學控制台</title>
+  <style>
+    :root {
+      --bg: #eef2f7; --card: #fff; --text: #152033; --muted: #6e7c90;
+      --line: #d9e1eb; --active-bg: #ffd84d; --active-text: #111;
+      --done-bg: #c8f7d3; --done-border: #6fd18b; --done-text: #1e5a34;
+      --danger: #c53c3c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .app { max-width: 900px; margin: 0 auto; padding: 18px 14px 32px; }
+    h1 { margin: 4px 0 14px; font-size: 28px; }
+    .status {
+      background: var(--card); border-radius: 18px; padding: 16px; margin-bottom: 14px;
+      box-shadow: 0 4px 20px rgba(30,50,80,.07);
+    }
+    .status-label { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+    .status-value {
+      font-size: 31px; font-weight: 900; color: #9c7700; min-height: 44px;
+      word-break: break-word;
+    }
+    .toolbar {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px;
+    }
+    button {
+      border: 0; border-radius: 14px; min-height: 54px;
+      font-size: 17px; font-weight: 800; cursor: pointer; touch-action: manipulation;
+    }
+    .tool.finish { background: #dcf6e4; color: #17623a; }
+    .tool.reset { background: #fbe2e2; color: var(--danger); }
+    .grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; position: relative;
+    }
+    .class-btn {
+      aspect-ratio: 1.2 / 1; min-height: 68px; background: var(--card);
+      border: 2px solid var(--line); color: var(--text);
+      font-size: clamp(22px, 5.5vw, 34px);
+      box-shadow: 0 3px 12px rgba(30,50,80,.05); position: relative;
+    }
+    .class-btn.active {
+      background: var(--active-bg); color: var(--active-text);
+      border-color: #e6bb15; box-shadow: 0 0 0 4px rgba(255,216,77,.18);
+    }
+    .class-btn.done {
+      background: var(--done-bg); color: var(--done-text);
+      border-color: var(--done-border);
+    }
+    .class-btn.done::after {
+      content: "✓"; position: absolute; right: 8px; top: 5px;
+      font-size: .55em; color: #26703e;
+    }
+    .divider {
+      grid-column: 1 / -1; height: 1px; background: #cfd7e2; margin: 3px 0;
+    }
+    .legend { margin-top: 14px; color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .warning {
+      margin-top: 14px; padding: 12px 14px; border-radius: 12px;
+      background: #fff3cd; color: #6a5200; font-size: 13px; line-height: 1.5;
+    }
+    .toast {
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px);
+      background: rgba(18,30,45,.94); color: #fff; padding: 10px 16px;
+      border-radius: 999px; opacity: 0; pointer-events: none; transition: .2s; font-size: 14px;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .loading {
+      position: fixed; inset: 0; display: grid; place-items: center;
+      background: #eef2f7; z-index: 50; font-weight: 800; color: #526174;
+    }
+    @media (max-width: 520px) {
+      .app { padding: 12px 10px 28px; }
+      h1 { font-size: 24px; }
+      .grid { gap: 7px; }
+      .class-btn { border-radius: 12px; min-height: 58px; }
+      .toolbar { gap: 7px; }
+      .tool { font-size: 14px; min-height: 48px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">連接放學系統中…</div>
+
+  <main class="app">
+    <h1>放學控制台</h1>
+
+    <section class="status">
+      <div class="status-label">正在放學</div>
+      <div class="status-value" id="activeClass">未開始</div>
+
+      <div class="toolbar">
+        <button class="tool finish" id="finishAllBtn">完成全部放學中班別</button>
+        <button class="tool reset" id="resetBtn">全部重設</button>
+      </div>
+    </section>
+
+    <section class="grid" id="grid"></section>
+
+    <div class="legend">
+      點一下班別：加入／取消「放學中」。<br>
+      長按班別約 0.7 秒：直接標記為「已放學」。<br>
+      黃底黑字＝正在放學；淡綠色＝已完成放學。
+    </div>
+
+    <div class="warning">
+      此版本不設登入。任何知道控制頁網址的人都可以更改放學狀態，請不要公開分享控制頁網址。
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="common.js"></script>
+
+  <script>
+    const grid = document.getElementById("grid");
+    const activeClass = document.getElementById("activeClass");
+    const toast = document.getElementById("toast");
+    const loading = document.getElementById("loading");
+    const buttons = new Map();
+    let currentState = {active:{}, done:{}};
+    let db;
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 1300);
+    }
+
+    function render(data) {
+      data = data || {};
+      currentState = data;
+      const active = new Set(objectKeysTrue(data.active));
+      const done = new Set(objectKeysTrue(data.done));
+
+      activeClass.textContent = active.size ? [...active].join("、") : "未開始";
+
+      for (const [name, btn] of buttons) {
+        btn.classList.toggle("active", active.has(name));
+        btn.classList.toggle("done", done.has(name));
+      }
+    }
+
+    async function toggleActive(name) {
+      const activeNow = !!(currentState.active && currentState.active[name]);
+
+      const updates = {};
+      updates[`dismissal/active/${name}`] = activeNow ? null : true;
+      if (!activeNow) updates[`dismissal/done/${name}`] = null;
+      updates["dismissal/updatedAt"] = firebase.database.ServerValue.TIMESTAMP;
+
+      try {
+        await db.ref().update(updates);
+        showToast(activeNow ? `${name} 已取消放學中` : `${name} 放學中`);
+      } catch {
+        showToast("操作失敗");
+      }
+    }
+
+    async function finishClass(name) {
+      const updates = {};
+      updates[`dismissal/active/${name}`] = null;
+      updates[`dismissal/done/${name}`] = true;
+      updates["dismissal/updatedAt"] = firebase.database.ServerValue.TIMESTAMP;
+
+      try {
+        await db.ref().update(updates);
+        showToast(`${name} 已完成放學`);
+      } catch {
+        showToast("操作失敗");
+      }
+    }
+
+    DISMISSAL_CLASSES.forEach((name, index) => {
+      if (index === 15) {
+        const divider = document.createElement("div");
+        divider.className = "divider";
+        grid.appendChild(divider);
+      }
+
+      const btn = document.createElement("button");
+      btn.className = "class-btn";
+      btn.textContent = name;
+
+      let timer = null;
+      let longPressed = false;
+
+      const start = () => {
+        longPressed = false;
+        timer = setTimeout(async () => {
+          longPressed = true;
+          await finishClass(name);
+        }, 700);
+      };
+
+      const cancel = () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+      };
+
+      btn.addEventListener("mousedown", start);
+      btn.addEventListener("touchstart", start, {passive:true});
+      btn.addEventListener("mouseup", async () => {
+        cancel();
+        if (!longPressed) await toggleActive(name);
+      });
+      btn.addEventListener("touchend", async e => {
+        cancel();
+        if (!longPressed) {
+          e.preventDefault();
+          await toggleActive(name);
+        }
+      }, {passive:false});
+      btn.addEventListener("mouseleave", cancel);
+      btn.addEventListener("touchcancel", cancel);
+
+      grid.appendChild(btn);
+      buttons.set(name, btn);
+    });
+
+    try {
+      ({ db } = initFirebaseServices());
+      loading.style.display = "none";
+
+      db.ref("dismissal").on("value", snap => render(snap.val()), () => {
+        showToast("資料庫連線失敗");
+      });
+
+      document.getElementById("finishAllBtn").addEventListener("click", async () => {
+        const active = objectKeysTrue(currentState.active);
+        if (!active.length) return showToast("目前沒有放學中班別");
+
+        const updates = {};
+        active.forEach(name => {
+          updates[`dismissal/active/${name}`] = null;
+          updates[`dismissal/done/${name}`] = true;
+        });
+        updates["dismissal/updatedAt"] = firebase.database.ServerValue.TIMESTAMP;
+
+        try {
+          await db.ref().update(updates);
+          showToast("全部放學中班別已完成");
+        } catch {
+          showToast("操作失敗");
+        }
+      });
+
+      document.getElementById("resetBtn").addEventListener("click", async () => {
+        if (!confirm("確定重設全部班別狀態？")) return;
+
+        try {
+          await db.ref("dismissal").set({
+            active: {},
+            done: {},
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+          });
+          showToast("全部班別已重設");
+        } catch {
+          showToast("操作失敗");
+        }
+      });
+    } catch (err) {
+      loading.textContent = "Firebase 尚未設定，請先修改 firebase-config.js。";
+    }
+  </script>
+</body>
+</html>

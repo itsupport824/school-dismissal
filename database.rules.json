@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "dismissal": {
+      ".read": true,
+      ".write": true,
+      "active": {
+        "$class": {
+          ".validate": "newData.val() == true || newData.val() == null"
+        }
+      },
+      "done": {
+        "$class": {
+          ".validate": "newData.val() == true || newData.val() == null"
+        }
+      }
+    }
+  }
+}
