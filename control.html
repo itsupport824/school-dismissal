@@ -105,8 +105,8 @@
     <section class="grid" id="grid"></section>
 
     <div class="legend">
-      點一下班別：加入／取消「放學中」。<br>
-      長按班別約 0.7 秒：直接標記為「已放學」。<br>
+      按一下班別：顯示「放學中」。<br>
+      再按一下同一班別：標記為「已放學」。<br>
       黃底黑字＝正在放學；淡綠色＝已完成放學。
     </div>
 
@@ -151,15 +151,51 @@
       }
     }
 
-    async function toggleActive(name) {
-      const activeNow = !!(currentState.active && currentState.active[name]);
-
+    async function advanceClass(name) {
+      const isActive = !!(currentState.active && currentState.active[name]);
+      const isDone = !!(currentState.done && currentState.done[name]);
       const updates = {};
-      updates[`dismissal/active/${name}`] = activeNow ? null : true;
-      if (!activeNow) updates[`dismissal/done/${name}`] = null;
+
+      // 未開始 → 放學中 → 已放學 → 放學中
+      if (isActive) {
+        updates[`dismissal/active/${name}`] = null;
+        updates[`dismissal/done/${name}`] = true;
+      } else {
+        updates[`dismissal/active/${name}`] = true;
+        updates[`dismissal/done/${name}`] = null;
+      }
+
       updates["dismissal/updatedAt"] = firebase.database.ServerValue.TIMESTAMP;
 
       try {
+        await db.ref().update(updates);
+        showToast(isActive ? `${name} 已完成放學`
+                           : (isDone ? `${name} 重新設為放學中` : `${name} 放學中`));
+      } catch {
+        showToast("操作失敗");
+      }
+    }
+
+    DISMISSAL_CLASSES.forEach((name, index) => {
+      if (index === 15) {
+        const divider = document.createElement("div");
+        divider.className = "divider";
+        grid.appendChild(divider);
+      }
+
+      const btn = document.createElement("button");
+      btn.className = "class-btn";
+      btn.textContent = name;
+
+      btn.addEventListener("click", async () => {
+        await advanceClass(name);
+      });
+
+      grid.appendChild(btn);
+      buttons.set(name, btn);
+    });
+
+    try {
         await db.ref().update(updates);
         showToast(activeNow ? `${name} 已取消放學中` : `${name} 放學中`);
       } catch {
