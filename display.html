@@ -24,12 +24,12 @@
       color: var(--text);
     }
     .screen {
-      /* BrightSign 輸出 1280×768，但 LED 實際橫向可見範圍約 1150px。
-         因此內容只使用中央約 89.84%，左右各預留約 5.08% 安全空白。 */
-      width: 89.84375vw;
+      /* 1280×768：左 20px、右 110px，內容寬度 1150px */
+      width: calc(100vw - 130px);
       max-width: 1150px;
       height: 100vh;
-      margin: 0 auto;
+      margin-left: 20px;
+      margin-right: 110px;
       padding: 3.2vh 1.4vw 2.4vh;
       display: flex;
       flex-direction: column;
