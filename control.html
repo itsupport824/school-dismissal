@@ -156,7 +156,8 @@
       const isDone = !!(currentState.done && currentState.done[name]);
       const updates = {};
 
-      // 未開始 → 放學中 → 已放學 → 放學中
+      // 未開始 → 放學中 → 已放學
+      // 已放學再按一次 → 重新設為放學中，方便修正誤按
       if (isActive) {
         updates[`dismissal/active/${name}`] = null;
         updates[`dismissal/done/${name}`] = true;
@@ -169,8 +170,13 @@
 
       try {
         await db.ref().update(updates);
-        showToast(isActive ? `${name} 已完成放學`
-                           : (isDone ? `${name} 重新設為放學中` : `${name} 放學中`));
+        if (isActive) {
+          showToast(`${name} 已完成放學`);
+        } else if (isDone) {
+          showToast(`${name} 重新設為放學中`);
+        } else {
+          showToast(`${name} 放學中`);
+        }
       } catch {
         showToast("操作失敗");
       }
@@ -187,83 +193,10 @@
       btn.className = "class-btn";
       btn.textContent = name;
 
+      // 改用單擊，不再使用 0.7 秒長按
       btn.addEventListener("click", async () => {
         await advanceClass(name);
       });
-
-      grid.appendChild(btn);
-      buttons.set(name, btn);
-    });
-
-    try {
-        await db.ref().update(updates);
-        showToast(activeNow ? `${name} 已取消放學中` : `${name} 放學中`);
-      } catch {
-        showToast("操作失敗");
-      }
-    }
-
-    async function finishClass(name) {
-      const updates = {};
-      updates[`dismissal/active/${name}`] = null;
-      updates[`dismissal/done/${name}`] = true;
-      updates["dismissal/updatedAt"] = firebase.database.ServerValue.TIMESTAMP;
-
-      try {
-        await db.ref().update(updates);
-        showToast(`${name} 已完成放學`);
-      } catch {
-        showToast("操作失敗");
-      }
-    }
-
-    DISMISSAL_CLASSES.forEach((name, index) => {
-      if (index === 15) {
-        const divider = document.createElement("div");
-        divider.className = "divider";
-        grid.appendChild(divider);
-      }
-
-      const btn = document.createElement("button");
-      btn.className = "class-btn";
-      btn.textContent = name;
-
-      // 防止 Safari / Chrome 手機版長按時出現「複製／查詢／文字選取」
-      btn.addEventListener("contextmenu", e => e.preventDefault());
-      btn.addEventListener("selectstart", e => e.preventDefault());
-      btn.addEventListener("dragstart", e => e.preventDefault());
-
-      let timer = null;
-      let longPressed = false;
-
-      const start = () => {
-        longPressed = false;
-        timer = setTimeout(async () => {
-          longPressed = true;
-          await finishClass(name);
-        }, 700);
-      };
-
-      const cancel = () => {
-        if (timer) clearTimeout(timer);
-        timer = null;
-      };
-
-      btn.addEventListener("mousedown", start);
-      btn.addEventListener("touchstart", start, {passive:true});
-      btn.addEventListener("mouseup", async () => {
-        cancel();
-        if (!longPressed) await toggleActive(name);
-      });
-      btn.addEventListener("touchend", async e => {
-        cancel();
-        if (!longPressed) {
-          e.preventDefault();
-          await toggleActive(name);
-        }
-      }, {passive:false});
-      btn.addEventListener("mouseleave", cancel);
-      btn.addEventListener("touchcancel", cancel);
 
       grid.appendChild(btn);
       buttons.set(name, btn);
